@@ -615,7 +615,7 @@ def MOCUProposed(K_max, w, N, h , M, T, aLowerBountIn, aUppwerBountIn, seed, pse
         np.float64(h), np.intc(N), np.intc(M), drv.In(vec_a_lower), drv.In(vec_a_upper), np.intc(pseudoRandomSequence), drv.In(aOrder), grid=(blocks,1), block=(block_size,1,1))
     
     if min(a_save) == 0:
-    	print("Non sync case exists")
+        print("Non sync case exists")
     
     if K_max >= 1000:
         temp = np.sort(a_save)
@@ -661,7 +661,7 @@ def MOCU(K_max, w, N, h , M, T, aLowerBoundIn, aUpperBoundIn, seed):
     # print(a_save)
 
     if min(a_save) == 0:
-    	print("Non sync case exists")
+        print("Non sync case exists")
     
     if K_max >= 1000:
         temp = np.sort(a_save)
