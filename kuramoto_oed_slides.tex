@@ -1,0 +1,136 @@
+% Kuramoto OED Acceleration - Slides for Overleaf
+% Each slide begins with: \newpage\section*{}
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\section*{Accelerating OED for Kuramoto Synchronization with ML}
+Project: ``Accelerating Optimal Experimental Design for Robust Synchronization of Uncertain Kuramoto Oscillator Model Using Machine Learning''.
+
+\newpage\section*{Paper Introduction}
+\begin{itemize}
+\item \textbf{Context}: Synchronization in uncertain coupled oscillator networks (Kuramoto) is fundamental in power systems, neuroscience, and distributed control.
+\item \textbf{Gap}: OED for robust synchronization is computationally intensive due to repeated trajectory simulations and decision searches.
+\item \textbf{Contribution}: A machine-learning-accelerated OED framework using a neural surrogate on GPU to estimate MOCU and select experiments efficiently.
+\item \textbf{Validation}: Demonstrates accuracy vs ODE baselines and substantial speedups across multiple network sizes and uncertainty settings.
+\end{itemize}
+
+\newpage\section*{Paper Purpose}
+\begin{itemize}
+\item Formulate robust synchronization as minimizing MOCU under coupling uncertainty.
+\item Develop scalable selection policies (iNN, NN, iODE, ODE, ENTROPY, RANDOM).
+\item Replace expensive ODE-based marginal evaluations with a trained NN surrogate without degrading decisions.
+\item Empirically assess accuracy and runtime across network sizes (e.g., N=5, N=7) and uncertainty regimes.
+\end{itemize}
+
+\newpage\section*{Kuramoto Model Introduction}
+\begin{itemize}
+\item \textbf{Dynamics}: For $N$ oscillators with phases $\theta_i$ and natural frequencies $\omega_i$:
+\[ \dot{\theta}_i = \omega_i + \sum_{j\ne i} a_{ji} \, \sin(\theta_j - \theta_i). \]
+\item \textbf{Order parameter}: coherence measure
+\[ r \, e^{i\psi} = \frac{1}{N} \sum_{j=1}^{N} e^{i\theta_j}, \quad r\in[0,1], \]\
+$r\to 1$ indicates phase locking (synchronization), $r\approx 0$ incoherence.
+\item \textbf{Coupling}: matrix $A=[a_{ij}]$ typically symmetric with zero diagonal; strength and heterogeneity drive critical behavior.
+\item \textbf{Heterogeneity}: spread in $\omega_i$ competes with coupling to determine if/when synchronization emerges.
+\item \textbf{Applications}: power-grid frequency control, neural synchrony, Josephson junctions, chemical oscillators.
+\end{itemize}
+
+\newpage\section*{MOCU Concept and Mathematics}
+\begin{itemize}
+\item Kuramoto model: \(\dot{\theta}_i = \omega_i + \sum_{j\ne i} a_{ji}\,\sin(\theta_j-\theta_i)\).
+\item Prior over uncertain couplings: \(\Pi(A)=\prod_{i<j}\mathrm{Unif}([a^{\mathrm{L}}_{ij},a^{\mathrm{U}}_{ij}])\).
+\item Virtual hub augmentation (\(N{+}1\) embedding): add node $N{+}1$ with \(a_{i,N+1}=a_{N+1,i}=c\).
+\item Per-realization minimal augmentation: \(c^*(A)=\inf\{c\ge 0: D(A,c)=1\}\), where $D$ is a sync test.
+\item Mean Objective Cost of Uncertainty: \(\mathrm{MOCU}(\mathcal{B})=\mathbb{E}_{A\sim\Pi}[c^*(A)]\).
+\item OED objective per action $e$: \(e^* = \arg\min_e\; \mathbb{E}_{y}[\, \mathrm{MOCU}(\mathcal{U}(\mathcal{B},e,y)) \,]\).
+\end{itemize}
+
+\newpage\section*{Computing $c^*(A)$ and MOCU}
+\begin{itemize}
+\item Decision test $D(A,c)$:
+\begin{itemize}
+\item ODE backend: RK4 integration with $h=1/160$, $T=5$\,s; sync if post-transient increment spread $\le 10^{-3}$.
+\item NN backend: classifier on \((N{+}1)^2\) features decides sync/non-sync.
+\end{itemize}
+\item Search: exponential bracketing on $c$ then binary search until interval $< 2.5\times 10^{-4}$.
+\item Monte Carlo: $K_{\max}=20480$ samples on GPU; trim 0.5\% tails; average to estimate MOCU.
+\end{itemize}
+
+\newpage\section*{Methods (Selection Policies)}
+\begin{itemize}
+\item \textbf{NN} / \textbf{iNN}: NN-accelerated MOCU; \emph{i} updates bounds after each chosen edge.
+\item \textbf{ODE} / \textbf{iODE}: ODE-based MOCU with/without iterative updating.
+\item \textbf{ENTROPY}: Information-gain heuristic on coupling uncertainty.
+\item \textbf{RANDOM}: Baseline random edge selection.
+\end{itemize}
+
+\newpage\section*{Experiment Groups in 2021 Paper}
+\begin{itemize}
+\item \textbf{Network sizes}: $N\in\{5,7,8,\dots\}$ (paper evaluates multiple sizes; this repo includes N=5 and N=7).
+\item \textbf{Uncertainty regimes}: bounds proportional to $\tfrac{1}{2}|\omega_i-\omega_j|$ with scaling; additional structured scalings in N5; file-defined bounds in N7.
+\item \textbf{Backends}: ODE vs NN surrogate for MOCU estimation.
+\item \textbf{Policies}: iNN, NN, iODE, ODE, ENTROPY, RANDOM.
+\item \textbf{Metrics}: MOCU vs iteration, time per iteration, total runtime, selected sequences.
+\end{itemize}
+
+\newpage\section*{Experiment Setup (per paper and code)}
+\begin{itemize}
+\item Time grid: $\Delta t=1/160$, horizon $T=5$\,s $\Rightarrow M=T/\Delta t$.
+\item Sampling: $K_{\max}=20480$ Monte Carlo samples (GPU parallel), trimming for stability.
+\item N5: hardcoded $\omega$; bounds from $0.85/1.15\times \tfrac{1}{2}|\omega_i-\omega_j|$ with subset scalings (0.3, 0.45), symmetrized.
+\item N7: $\omega$, lower/upper bounds from \texttt{uncertaintyClass/} files.
+\item For each sampled $A$: skip if synchronized; otherwise run each policy, log MOCU/time/sequence; repeat for 100 unstable networks.
+\end{itemize}
+
+\newpage\section*{Results in Paper (Insert)}
+\begin{itemize}
+\item NN/iNN closely match ODE/iODE MOCU reduction with \emph{large} runtime savings.
+\item iNN/iODE typically outperform batch variants as iterations progress.
+\item \textit{Insert paper tables/plots here: final MOCU, speedups, convergence across sizes.}
+\end{itemize}
+
+\newpage\section*{Reproduction Results: N=5 and N=7 Oscillators}
+\textbf{Experimental Setup:}
+\begin{itemize}
+\item \textbf{N=5:} Natural frequencies $\omega = [-2.5, -0.667, 1.167, 2.0, 5.833]$
+\item \textbf{N=7:} Seven oscillators with diverse frequency distribution
+\item Monte Carlo samples: $K = 20,480$ (RTX 4090 optimization)
+\item Simulations per method: 100
+\item Time integration: $\Delta t = 1/160$, $T = 5$ seconds
+\end{itemize}
+
+\textbf{N=5 Reproduction Results (100 Simulations):}
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Initial MOCU} & \textbf{Final MOCU} & \textbf{Improvement} \\
+\midrule
+ iNN & 0.3094 & 0.2859 & 7.6\% \\
+ NN & 0.3084 & 0.2859 & 7.3\% \\
+ ODE & 0.3088 & 0.2860 & 7.4\% \\
+ ENTROPY & 0.3087 & 0.2860 & 7.4\% \\
+ RANDOM & 0.3083 & 0.2863 & 7.2\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textit{N=7 reproduction results pending.}
+
+\newpage\section*{Analysis and Takeaways}
+\begin{itemize}
+\item NN/iNN achieve similar MOCU reduction to ODE/iODE while reducing runtime dramatically (per paper and code profiling).
+\item Iterative strategies (iNN/iODE) adapt to updated bounds, offering consistent gains over batch selection.
+\item Scaling to N7 increases cost, but NN surrogate preserves acceleration and decision quality.
+\end{itemize}
+
+\end{document}
